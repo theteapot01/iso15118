@@ -6,6 +6,6 @@
 		"DC_BPT"
 	],
 	"isCertInstallNeeded": false,
-	"useTls": false,
+	"useTls": true,
 	"chargeLoopCycle": 10
 }
