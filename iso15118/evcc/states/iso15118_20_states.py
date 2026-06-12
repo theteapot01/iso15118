@@ -1286,7 +1286,23 @@ class ACChargeLoop(StateEVCC):
                 next_state=PowerDelivery, renegotiate_requested=renegotiation
             )
 
-        elif await self.comm_session.ev_controller.continue_charging():
+        ctrl = self.comm_session.ev_controller
+        if hasattr(ctrl, "update_evse_limits"):
+            res_ctrl = ac_charge_loop_res.bpt_scheduled_ac_charge_loop_res
+            if res_ctrl is not None:
+                # AC charging uses EVSETargetActivePower in ScheduledACChargeLoopResParams
+                # but might not have a direct max discharge power in this model.
+                # For now, if it's BPT, we check what's available.
+                charge_w = res_ctrl.evse_target_active_power
+                # BPTScheduledACChargeLoopResParams is empty in ac.py, so it inherits
+                # everything from ScheduledACChargeLoopResParams.
+                if charge_w:
+                    ctrl.update_evse_limits(
+                        float(charge_w.value * 10**charge_w.exponent),
+                        0.0,  # Default discharge to 0 if not specified for AC
+                    )
+
+        if await self.comm_session.ev_controller.continue_charging():
             try:
                 delay: int = (
                     await self.comm_session.ev_controller.charge_loop_delay()
@@ -1669,7 +1685,18 @@ class DCChargeLoop(StateEVCC):
                 next_state=PowerDelivery, renegotiate_requested=renegotiation
             )
 
-        elif await self.comm_session.ev_controller.continue_charging():
+        ctrl = self.comm_session.ev_controller
+        if hasattr(ctrl, "update_evse_limits"):
+            res_ctrl = charge_loop_res.bpt_scheduled_dc_charge_loop_res
+            if res_ctrl is not None:
+                charge_w = res_ctrl.evse_maximum_charge_power  # RationalNumber
+                discharge_w = res_ctrl.evse_max_discharge_power
+                ctrl.update_evse_limits(
+                    float(charge_w.value * 10**charge_w.exponent),
+                    float(discharge_w.value * 10**discharge_w.exponent),
+                )
+
+        if await self.comm_session.ev_controller.continue_charging():
             try:
                 delay: int = (
                     await self.comm_session.ev_controller.charge_loop_delay()
